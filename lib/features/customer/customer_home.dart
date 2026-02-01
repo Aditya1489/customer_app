@@ -5,9 +5,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:customer_sync/widgets/gradient_background.dart';
 import 'package:customer_sync/core/theme/app_theme.dart';
 import 'package:customer_sync/services/mock_data.dart';
-import 'package:customer_sync/features/customer/widgets/shop_details_overlay.dart';
-import 'package:customer_sync/features/customer/widgets/staff_profile_overlay.dart';
-import 'package:customer_sync/features/customer/widgets/booking_flow_overlay.dart';
 import 'package:customer_sync/models/models.dart';
 import 'package:customer_sync/core/providers/theme_provider.dart';
 import 'package:customer_sync/core/providers/user_provider.dart';
@@ -18,6 +15,7 @@ import 'package:customer_sync/widgets/user_avatar.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:customer_sync/widgets/universal_image.dart';
+import 'package:customer_sync/services/notification_service.dart';
 
 class CustomerHomeScreen extends ConsumerStatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -46,6 +44,16 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
     super.initState();
     _checkLocationPermission();
     _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = ref.read(userProvider);
+      ref.read(notificationServiceProvider).startPolling(user.id);
+    });
+  }
+
+  @override
+  void dispose() {
+    ref.read(notificationServiceProvider).stopPolling();
+    super.dispose();
   }
 
   Future<void> _checkLocationPermission() async {
@@ -124,9 +132,39 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
     }
   }
 
+  void _onTabTapped(int index) {
+    setState(() => _currentIndex = index);
+    if (index == 1) {
+      // Mark all notifications as read when entering bookings tab
+      _markNotificationsAsRead();
+    }
+  }
+
+  Future<void> _markNotificationsAsRead() async {
+    final user = ref.read(userProvider);
+    final apiService = ref.read(apiServiceProvider);
+    final notifications = await apiService.getNotifications(user.id);
+    
+    for (var notif in notifications) {
+      if (!notif['isRead']) {
+        await apiService.markNotificationAsRead(notif['id']);
+      }
+    }
+    // Update local count
+    ref.read(unreadNotificationCountProvider.notifier).state = 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     isDark = ref.watch(themeProvider);
+    final user = ref.watch(userProvider);
+
+    // Auto-refresh when notification service triggers (e.g. status change)
+    ref.listen(refreshTriggerProvider, (prev, next) {
+      if (next > (prev ?? 0)) {
+        _loadData();
+      }
+    });
     return Stack(
       children: [
         Scaffold(
@@ -135,47 +173,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
           body: _buildTabContent(),
           bottomNavigationBar: _buildBottomNav(),
         ),
-        if (_selectedShop != null && _bookingStep == null)
-          Positioned.fill(
-            child: ShopDetailsOverlay(
-              shop: _selectedShop!,
-              isDark: isDark,
-              onClose: () => setState(() => _selectedShop = null),
-              onStaffSelected: (staff) {
-                setState(() => _viewingStaff = staff);
-              },
-              onBookNow: () => setState(() => _bookingStep = 'staff'),
-            ),
-          ),
-        if (_bookingStep != null)
-          Positioned.fill(
-            child: BookingFlowOverlay(
-              shop: _selectedShop!,
-              initialStaff: _selectedStaff,
-              isDark: isDark,
-              onClose: () => setState(() {
-                _bookingStep = null;
-                _selectedStaff = null;
-              }),
-              onComplete: (appt) {
-                setState(() {
-                  _appointments.insert(0, appt);
-                  _bookingStep = null;
-                  _selectedShop = null;
-                  _selectedStaff = null;
-                  _currentIndex = 1; // Go to Bookings tab
-                });
-              },
-            ),
-          ),
-        if (_viewingStaff != null)
-          Positioned.fill(
-            child: StaffProfileOverlay(
-              staff: _viewingStaff!,
-              isDark: isDark,
-              onClose: () => setState(() => _viewingStaff = null),
-            ),
-          ),
       ],
     );
   }
@@ -192,157 +189,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
       case 0:
         return _buildHomeTab();
       case 1:
-        return _buildExploreTab();
-      case 2:
         return _buildAppointmentsTab();
-      case 3:
+      case 2:
         return _buildProfileTab();
       default:
         return const SizedBox();
     }
-  }
-
-  Widget _buildExploreTab() {
-    // Aggregate all photos from shops and staff
-    final List<Map<String, dynamic>> allItems = [];
-    
-    for (var shop in _shops) {
-      // Add shop photos
-      for (var photo in shop.photos) {
-        allItems.add({
-          'type': 'shop',
-          'photo': photo,
-          'title': shop.name,
-          'subtitle': 'Salon Gallery',
-          'shop': shop,
-        });
-      }
-      
-      // Add staff photos
-      for (var staff in shop.staff) {
-        for (var photo in staff.workPhotos) {
-          allItems.add({
-            'type': 'staff',
-            'photo': photo,
-            'title': staff.name,
-            'subtitle': '${shop.name} • Portfolio',
-            'shop': shop,
-            'staff': staff,
-          });
-        }
-      }
-    }
-
-    // Shuffle for freshness
-    allItems.shuffle();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 60, 24, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Explore Gallery",
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black),
-              ),
-              Text(
-                "Real work by local barbers",
-                style: TextStyle(fontSize: 14, color: (isDark ? Colors.white : Colors.black).withOpacity(0.5)),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: allItems.isEmpty
-              ? Center(child: Text("No photos uploaded yet", style: TextStyle(color: (isDark ? Colors.white : Colors.black).withOpacity(0.4))))
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-                  itemCount: allItems.length,
-                  itemBuilder: (context, index) => _buildExploreCard(allItems[index]),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildExploreCard(Map<String, dynamic> item) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: isDark ? (Colors.white.withOpacity(0.05)) : Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: isDark ? null : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: () => setState(() => _selectedShop = item['shop']),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(32),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    UniversalImage(
-                      imagePath: item['photo'],
-                      fit: BoxFit.cover,
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    item['title'],
-                                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                                  ),
-                                  Text(
-                                    item['subtitle'],
-                                    style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppTheme.darkAccent,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: const Icon(LucideIcons.scissors, color: Colors.white, size: 20),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildHomeTab() {
@@ -365,7 +217,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                         style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
                       ),
                       Text(
-                        "Near 123 Main St, New York",
+                        _currentPosition != null ? "Nearby • Using your location" : "Enable location for nearby shops",
                         style: TextStyle(fontSize: 14, color: (isDark ? Colors.white : Colors.black).withOpacity(0.5)),
                       ),
                     ],
@@ -580,14 +432,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                     }),
                     const SizedBox(width: 8),
                     _buildShopAction(LucideIcons.sliders, "DETAILS", (isDark ? Colors.white : Colors.black).withOpacity(0.05), isDark ? Colors.white : Colors.black, () {
-                      setState(() => _selectedShop = shop);
+                      context.push('/shop-preview', extra: shop);
                     }),
                     const SizedBox(width: 8),
-                    _buildShopAction(LucideIcons.calendar, "BOOK NOW", isDark ? AppTheme.darkAccent : AppTheme.lightAccent, Colors.white, () {
-                      setState(() {
-                        _selectedShop = shop;
-                        _bookingStep = 'staff';
-                      });
+                    _buildShopAction(LucideIcons.calendar, "BOOK NOW", isDark ? AppTheme.darkAccent : AppTheme.lightAccent, Colors.white, () async {
+                      final result = await context.push('/booking', extra: {'shop': shop});
+                      if (result == true) _loadData();
                     }),
                   ],
                 ),
@@ -674,7 +524,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                   width: 50,
                   height: 50,
                   child: GestureDetector(
-                    onTap: () => setState(() => _selectedShop = shop),
+                    onTap: () async {
+                      final result = await context.push('/shop-preview', extra: shop);
+                      if (result == true) _loadData();
+                    },
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -799,32 +652,75 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                           color: isDark ? AppTheme.darkCardBG : Colors.white,
                           borderRadius: BorderRadius.circular(24),
                         ),
-                        child: Row(
+                        child: Column(
                           children: [
-                            Container(
-                              width: 64,
-                              height: 64,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                image: DecorationImage(image: NetworkImage(shop.photos[0]), fit: BoxFit.cover),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(shop.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black)),
-                                  Text("${appt.date} • ${appt.timeSlot}", style: TextStyle(fontSize: 12, color: (isDark ? Colors.white : Colors.black).withOpacity(0.6))),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "\$${appt.totalAmount}",
-                                    style: TextStyle(color: isDark ? AppTheme.darkAccent : AppTheme.lightAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                            Row(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: UniversalImage(
+                                    imagePath: shop.photos.isNotEmpty ? shop.photos[0] : null,
+                                    width: 64,
+                                    height: 64,
+                                    fit: BoxFit.cover,
                                   ),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(shop.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black)),
+                                      Text("${appt.date} • ${appt.timeSlot}", style: TextStyle(fontSize: 12, color: (isDark ? Colors.white : Colors.black).withOpacity(0.6))),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "\$${appt.totalAmount}",
+                                        style: TextStyle(color: isDark ? AppTheme.darkAccent : AppTheme.lightAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(LucideIcons.chevronRight, size: 20, color: (isDark ? Colors.white : Colors.black).withOpacity(0.2)),
+                              ],
                             ),
-                            Icon(LucideIcons.chevronRight, size: 20, color: (isDark ? Colors.white : Colors.black).withOpacity(0.2)),
+                            // Show Rate button for completed appointments
+                            if (_activeAppointmentFilter == 'COMPLETED')
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: InkWell(
+                                  onTap: () {
+                                    context.push('/submit-review', extra: {
+                                      'shopId': appt.shopId,
+                                      'staffId': appt.staffId,
+                                      'shopName': shop.name,
+                                      'staffName': 'your barber',
+                                    });
+                                  },
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(LucideIcons.star, size: 16, color: Colors.amber.shade700),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Rate Your Experience',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.amber.shade700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       );
@@ -877,9 +773,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                   Stack(
                     children: [
                       UserAvatar(
-                        user: ref.watch(userProvider),
+                        photoUrl: ref.watch(userProvider).profilePhoto,
+                        name: ref.watch(userProvider).name,
                         radius: 50,
-                        isDark: isDark,
                       ),
                       Positioned(
                         bottom: 0,
@@ -998,9 +894,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _buildNavItem(0, LucideIcons.home, "HOME"),
-              _buildNavItem(1, LucideIcons.camera, "EXPLORE"),
-              _buildNavItem(2, LucideIcons.calendar, "BOOKINGS"),
-              _buildNavItem(3, LucideIcons.user, "PROFILE"),
+              _buildNavItem(1, LucideIcons.calendar, "BOOKINGS", badgeCount: ref.watch(unreadNotificationCountProvider)),
+              _buildNavItem(2, LucideIcons.user, "PROFILE"),
             ],
           ),
         ),
@@ -1008,17 +903,47 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
+  Widget _buildNavItem(int index, IconData icon, String label, {int badgeCount = 0}) {
     bool isActive = _currentIndex == index;
     Color color = isActive ? (isDark ? AppTheme.darkAccent : AppTheme.lightAccent) : (isDark ? Colors.white : Colors.black).withOpacity(0.4);
 
     return InkWell(
-      onTap: () => setState(() => _currentIndex = index),
+      onTap: () => _onTabTapped(index),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 20),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(icon, color: color, size: 20),
+              if (badgeCount > 0)
+                Positioned(
+                  right: -8,
+                  top: -8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      badgeCount > 9 ? '9+' : badgeCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 2),
           Text(
             label,

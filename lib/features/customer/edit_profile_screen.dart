@@ -102,9 +102,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                 fit: BoxFit.cover,
                               )
                             : UserAvatar(
-                                user: ref.watch(userProvider),
+                                photoUrl: ref.watch(userProvider).profilePhoto,
+                                name: ref.watch(userProvider).name,
                                 radius: 60,
-                                isDark: isDark,
                               ),
                         ),
                       ),
@@ -161,13 +161,27 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         final currentUser = ref.read(userProvider);
                         final apiService = ref.read(apiServiceProvider);
                         
+                        String? uploadedPhotoUrl;
+                        if (_pickedImage != null) {
+                           uploadedPhotoUrl = await apiService.uploadFile(File(_pickedImage!.path));
+                           if (uploadedPhotoUrl == null) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Failed to upload image'), backgroundColor: Colors.red),
+                                );
+                              }
+                              setState(() => _isSaving = false);
+                              return;
+                           }
+                        }
+
                         final updatedUser = await apiService.updateProfile(
                           currentUser.id,
                           {
                             'name': _nameController.text,
                             'phone': _phoneController.text,
                             'email': _emailController.text,
-                            if (_pickedImage != null) 'profilePhoto': _pickedImage!.path,
+                            if (uploadedPhotoUrl != null) 'profilePhoto': uploadedPhotoUrl,
                           },
                         );
                         

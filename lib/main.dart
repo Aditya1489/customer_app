@@ -5,8 +5,15 @@ import 'package:customer_sync/core/routing/app_router.dart';
 import 'package:customer_sync/core/theme/app_theme.dart';
 import 'package:customer_sync/core/providers/theme_provider.dart';
 
-void main() {
+import 'package:customer_sync/services/notification_service.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Notifications
+  final container = ProviderContainer();
+  await container.read(notificationServiceProvider).initialize();
+
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -19,8 +26,9 @@ void main() {
     ),
   );
   runApp(
-    const ProviderScope(
-      child: MyApp(),
+    UncontrolledProviderScope(
+      container: container,
+      child: const MyApp(),
     ),
   );
 }

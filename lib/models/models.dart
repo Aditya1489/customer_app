@@ -9,6 +9,7 @@ enum AppointmentStatus {
   accepted,
   cancelled,
   completed,
+  noShow,
 }
 
 class Service {
@@ -48,6 +49,7 @@ class Staff {
   final String imageUrl;
   final List<String> workPhotos;
   final List<String> services;
+  final String? shopId;
 
   Staff({
     required this.id,
@@ -60,6 +62,7 @@ class Staff {
     required this.imageUrl,
     required this.workPhotos,
     required this.services,
+    this.shopId,
   });
 
   factory Staff.fromJson(Map<String, dynamic> json) {
@@ -74,6 +77,7 @@ class Staff {
       imageUrl: json['imageUrl'] ?? '',
       workPhotos: List<String>.from(json['workPhotos'] ?? []),
       services: List<String>.from(json['services'] ?? []),
+      shopId: json['shopId'],
     );
   }
 }
@@ -156,7 +160,10 @@ class Appointment {
       date: json['date'] ?? '',
       timeSlot: json['timeSlot'] ?? '',
       status: AppointmentStatus.values.firstWhere(
-        (e) => e.name.toUpperCase() == (json['status'] ?? 'PENDING'),
+        (e) {
+          final normalizedName = e.name.replaceAll(RegExp(r'(?=[A-Z])'), '_').toUpperCase();
+          return normalizedName == (json['status'] as String).replaceAll(' ', '_').toUpperCase();
+        },
         orElse: () => AppointmentStatus.pending,
       ),
       totalAmount: (json['totalAmount'] ?? 0.0).toDouble(),

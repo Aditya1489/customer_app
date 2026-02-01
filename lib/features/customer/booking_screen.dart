@@ -8,28 +8,24 @@ import 'package:customer_sync/widgets/gradient_background.dart';
 import 'package:customer_sync/widgets/user_avatar.dart';
 import 'package:customer_sync/services/api_service.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
+import 'package:customer_sync/core/providers/theme_provider.dart';
 
-class BookingFlowOverlay extends ConsumerStatefulWidget {
+class BookingScreen extends ConsumerStatefulWidget {
   final BarberShop shop;
   final Staff? initialStaff;
-  final bool isDark;
-  final VoidCallback onClose;
-  final Function(Appointment appointment) onComplete;
 
-  const BookingFlowOverlay({
+  const BookingScreen({
     super.key,
     required this.shop,
     this.initialStaff,
-    required this.isDark,
-    required this.onClose,
-    required this.onComplete,
   });
 
   @override
-  ConsumerState<BookingFlowOverlay> createState() => _BookingFlowOverlayState();
+  ConsumerState<BookingScreen> createState() => _BookingScreenState();
 }
 
-class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
+class _BookingScreenState extends ConsumerState<BookingScreen> {
   String _step = 'staff';
   Staff? _selectedStaff;
   final List<String> _selectedServiceIds = [];
@@ -52,29 +48,30 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
       if (_step == 'summary') _step = 'slot';
       else if (_step == 'slot') _step = 'services';
       else if (_step == 'services') {
-        if (widget.initialStaff != null) widget.onClose();
+        if (widget.initialStaff != null) context.pop();
         else _step = 'staff';
-      } else widget.onClose();
+      } else context.pop();
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = ref.watch(themeProvider);
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: GradientBackground(
-        isDark: widget.isDark,
+        isDark: isDark,
         child: SafeArea(
           child: Column(
             children: [
-              _buildHeader(),
+              _buildHeader(isDark),
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
-                  child: _buildStepContent(),
+                  child: _buildStepContent(isDark),
                 ),
               ),
-              _buildFooter(),
+              _buildFooter(isDark),
             ],
           ),
         ),
@@ -82,7 +79,7 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isDark) {
     String title = "Booking";
     if (_step == 'staff') title = "Select a Barber";
     else if (_step == 'services') title = "Select Services";
@@ -98,30 +95,31 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.05),
+                color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(LucideIcons.arrowLeft, size: 20, color: widget.isDark ? Colors.white : Colors.black),
+              child: Icon(LucideIcons.arrowLeft, size: 20, color: isDark ? Colors.white : Colors.black),
             ),
           ),
           const SizedBox(width: 16),
-          Text(title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black)),
+          Text(title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
         ],
       ),
     );
   }
 
-  Widget _buildStepContent() {
-    if (_step == 'staff') return _buildStaffSelector();
-    if (_step == 'services') return _buildServiceSelector();
-    if (_step == 'slot') return _buildSlotSelector();
-    if (_step == 'summary') return _buildSummary();
+  Widget _buildStepContent(bool isDark) {
+    if (_step == 'staff') return _buildStaffSelector(isDark);
+    if (_step == 'services') return _buildServiceSelector(isDark);
+    if (_step == 'slot') return _buildSlotSelector(isDark);
+    if (_step == 'summary') return _buildSummary(isDark);
     return const SizedBox();
   }
 
-  Widget _buildStaffSelector() {
+  Widget _buildStaffSelector(bool isDark) {
     return GridView.builder(
       key: const ValueKey('staff'),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       physics: const ClampingScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
@@ -141,7 +139,7 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.05),
+              color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
               borderRadius: BorderRadius.circular(32),
               border: Border.all(color: isSelected ? AppTheme.darkButton : Colors.transparent, width: 2),
             ),
@@ -153,15 +151,15 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
                   name: staff.name,
                 ),
                 const SizedBox(height: 12),
-                Text(staff.name, style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black)),
-                Text(staff.role, style: TextStyle(fontSize: 10, color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.4))),
+                Text(staff.name, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                Text(staff.role, style: TextStyle(fontSize: 10, color: (isDark ? Colors.white : Colors.black).withOpacity(0.4))),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(LucideIcons.star, size: 12, color: Colors.yellow),
+                    const Icon(LucideIcons.star, size: 12, color: Colors.yellow),
                     const SizedBox(width: 4),
-                    Text(staff.rating.toString(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black)),
+                    Text(staff.rating.toString(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
                   ],
                 ),
               ],
@@ -172,8 +170,7 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
     );
   }
 
-  Widget _buildServiceSelector() {
-    // If staff has services assigned, filter. Otherwise show all shop services as fallback.
+  Widget _buildServiceSelector(bool isDark) {
     final staffServices = _selectedStaff?.services ?? [];
     final availableServices = staffServices.isEmpty 
         ? widget.shop.services 
@@ -196,7 +193,7 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.05),
+              color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: isSelected ? AppTheme.darkButton : Colors.transparent, width: 2),
             ),
@@ -208,17 +205,17 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
                   decoration: BoxDecoration(
                     color: isSelected ? AppTheme.darkButton : Colors.transparent,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.2)),
+                    border: Border.all(color: (isDark ? Colors.white : Colors.black).withOpacity(0.2)),
                   ),
-                  child: isSelected ? Icon(LucideIcons.check, size: 16, color: Colors.white) : null,
+                  child: isSelected ? const Icon(LucideIcons.check, size: 16, color: Colors.white) : null,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(service.name, style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black)),
-                      Text("${service.duration} min", style: TextStyle(fontSize: 12, color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.4))),
+                      Text(service.name, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                      Text("${service.duration} min", style: TextStyle(fontSize: 12, color: (isDark ? Colors.white : Colors.black).withOpacity(0.4))),
                     ],
                   ),
                 ),
@@ -231,7 +228,7 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
     );
   }
 
-  Widget _buildSlotSelector() {
+  Widget _buildSlotSelector(bool isDark) {
     final now = DateTime.now();
     final dates = List.generate(7, (index) {
       final date = now.add(Duration(days: index));
@@ -251,7 +248,7 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("SELECT DATE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.4))),
+          Text("SELECT DATE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: (isDark ? Colors.white : Colors.black).withOpacity(0.4))),
           const SizedBox(height: 12),
           SizedBox(
             height: 60,
@@ -266,18 +263,18 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppTheme.darkButton : (widget.isDark ? Colors.white : Colors.black).withOpacity(0.05),
+                      color: isSelected ? AppTheme.darkButton : (isDark ? Colors.white : Colors.black).withOpacity(0.05),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     alignment: Alignment.center,
-                    child: Text(dates[index], style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? Colors.white : (widget.isDark ? Colors.white : Colors.black))),
+                    child: Text(dates[index], style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? Colors.white : (isDark ? Colors.white : Colors.black))),
                   ),
                 );
               },
             ),
           ),
           const SizedBox(height: 32),
-          Text("SELECT SLOT", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.4))),
+          Text("SELECT SLOT", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: (isDark ? Colors.white : Colors.black).withOpacity(0.4))),
           const SizedBox(height: 12),
           GridView.builder(
             shrinkWrap: true,
@@ -295,11 +292,11 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
                 onTap: () => setState(() => _selectedSlot = slots[index]),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isSelected ? AppTheme.darkButton : (widget.isDark ? Colors.white : Colors.black).withOpacity(0.05),
+                    color: isSelected ? AppTheme.darkButton : (isDark ? Colors.white : Colors.black).withOpacity(0.05),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   alignment: Alignment.center,
-                  child: Text(slots[index], style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : (widget.isDark ? Colors.white : Colors.black))),
+                  child: Text(slots[index], style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : (isDark ? Colors.white : Colors.black))),
                 ),
               );
             },
@@ -309,8 +306,8 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
     );
   }
 
-  Widget _buildSummary() {
-    double total = widget.shop.services.where((s) => _selectedServiceIds.contains(s.id)).fold(0, (sum, s) => sum + s.price);
+  Widget _buildSummary(bool isDark) {
+    double total = widget.shop.services.where((s) => _selectedServiceIds.contains(s.id)).fold(0.0, (sum, s) => sum + s.price);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -319,7 +316,7 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.05),
+              color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
               borderRadius: BorderRadius.circular(32),
             ),
             child: Column(
@@ -335,17 +332,17 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("WITH", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.4))),
-                        Text(_selectedStaff!.name, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black)),
+                        Text("WITH", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: (isDark ? Colors.white : Colors.black).withOpacity(0.4))),
+                        Text(_selectedStaff!.name, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
                       ],
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
-                _buildSummaryRow("Date & Time", "$_selectedDate • $_selectedSlot"),
+                _buildSummaryRow(isDark, "Date & Time", "$_selectedDate • $_selectedSlot"),
                 const SizedBox(height: 16),
-                _buildSummaryRow("Services", _selectedServiceIds.length.toString()),
-                 Divider(height: 32, color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.1)),
+                _buildSummaryRow(isDark, "Services", _selectedServiceIds.length.toString()),
+                 Divider(height: 32, color: (isDark ? Colors.white : Colors.black).withOpacity(0.1)),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -361,17 +358,17 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
     );
   }
 
-  Widget _buildSummaryRow(String label, String value) {
+  Widget _buildSummaryRow(bool isDark, String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.5))),
-        Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black)),
+        Text(label, style: TextStyle(color: (isDark ? Colors.white : Colors.black).withOpacity(0.5))),
+        Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
       ],
     );
   }
 
-  Widget _buildFooter() {
+  Widget _buildFooter(bool isDark) {
     bool canProceed = false;
     String buttonText = "Next";
 
@@ -422,7 +419,7 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
               final appt = await apiService.createBooking(bookingData);
               
               if (appt != null) {
-                widget.onComplete(appt);
+                if (mounted) context.pop(true); // Return true to signal refresh
               } else {
                 if (mounted) {
                    ScaffoldMessenger.of(context).showSnackBar(

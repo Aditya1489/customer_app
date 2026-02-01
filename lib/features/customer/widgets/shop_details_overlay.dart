@@ -5,6 +5,7 @@ import 'package:customer_sync/core/theme/app_theme.dart';
 import 'package:customer_sync/models/models.dart';
 import 'package:customer_sync/widgets/gradient_background.dart';
 import 'package:customer_sync/widgets/universal_image.dart';
+import 'package:customer_sync/widgets/user_avatar.dart';
 
 class ShopDetailsOverlay extends StatefulWidget {
   final BarberShop shop;
@@ -63,7 +64,8 @@ class _ShopDetailsOverlayState extends State<ShopDetailsOverlay> {
   }
 
   Widget _buildAppBar(BuildContext context) {
-    final photos = widget.shop.photos.isNotEmpty ? widget.shop.photos : [null];
+    final hasPhotos = widget.shop.photos.isNotEmpty;
+    final photos = hasPhotos ? widget.shop.photos : ["placeholder"];
 
     return SliverAppBar(
       expandedHeight: MediaQuery.of(context).size.height * 0.45,
@@ -84,32 +86,36 @@ class _ShopDetailsOverlayState extends State<ShopDetailsOverlay> {
         background: Stack(
           fit: StackFit.expand,
           children: [
-            Hero(
-              tag: 'shop-${widget.shop.id}',
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: (index) => setState(() => _currentPhotoIndex = index),
-                itemCount: photos.length,
-                itemBuilder: (context, index) => UniversalImage(
+            PageView.builder(
+              controller: _pageController,
+              onPageChanged: (index) => setState(() => _currentPhotoIndex = index),
+              itemCount: photos.length,
+              itemBuilder: (context, index) {
+                if (photos[index] == "placeholder") {
+                  return const UniversalImage(imagePath: null, fit: BoxFit.cover, placeholder: 'https://picsum.photos/800/600');
+                }
+                return UniversalImage(
                   imagePath: photos[index] as String?,
                   fit: BoxFit.cover,
                   placeholder: 'https://picsum.photos/800/600',
-                ),
-              ),
+                );
+              },
             ),
-            // Gradient overlay
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.4),
-                    Colors.transparent,
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
-                  ],
-                  stops: const [0, 0.2, 0.7, 1],
+             // Gradient overlay - wrapped in IgnorePointer to allow scrolling
+            IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.4),
+                      Colors.transparent,
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.7),
+                    ],
+                    stops: const [0, 0.2, 0.7, 1],
+                  ),
                 ),
               ),
             ),
@@ -293,19 +299,10 @@ class _ShopDetailsOverlayState extends State<ShopDetailsOverlay> {
         ),
         child: Column(
           children: [
-            Container(
-              width: 70,
-              height: 70,
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: (widget.isDark ? Colors.white : Colors.black).withOpacity(0.1)),
-              ),
-              child: CircleAvatar(
-                backgroundImage: (staff.imageUrl.startsWith('http'))
-                      ? NetworkImage(staff.imageUrl) as ImageProvider
-                      : FileImage(File(staff.imageUrl)),
-              ),
+            UserAvatar(
+              radius: 35,
+              photoUrl: staff.imageUrl,
+              name: staff.name,
             ),
             const SizedBox(height: 8),
             Text(

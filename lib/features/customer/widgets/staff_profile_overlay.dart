@@ -4,6 +4,7 @@ import 'package:customer_sync/core/theme/app_theme.dart';
 import 'package:customer_sync/models/models.dart';
 import 'package:customer_sync/widgets/gradient_background.dart';
 import 'package:customer_sync/widgets/universal_image.dart';
+import 'package:customer_sync/widgets/user_avatar.dart';
 
 class StaffProfileOverlay extends StatelessWidget {
   final Staff staff;
@@ -46,18 +47,11 @@ class StaffProfileOverlay extends StatelessWidget {
                 padding: const EdgeInsets.all(24.0),
                 child: Column(
                   children: [
-                    Container(
-                      width: 128,
-                      height: 128,
-                      decoration: const BoxDecoration(shape: BoxShape.circle),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(64),
-                        child: UniversalImage(
-                          imagePath: staff.imageUrl,
-                          fit: BoxFit.cover,
-                          placeholder: 'https://picsum.photos/200/200',
-                        ),
-                      ),
+                    UserAvatar(
+                      radius: 64,
+                      photoUrl: staff.imageUrl,
+                      name: staff.name,
+                      fontSize: 48,
                     ),
                     const SizedBox(height: 16),
                     Text(staff.name, style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black)),
