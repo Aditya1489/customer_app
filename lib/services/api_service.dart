@@ -2,25 +2,38 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:customer_sync/models/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:customer_sync/core/config/app_config.dart';
+import 'package:customer_sync/core/utils/logger.dart';
 
 final apiServiceProvider = Provider((ref) => ApiService());
 
 class ApiService {
   final Dio _dio = Dio(BaseOptions(
-    baseUrl: Platform.isAndroid ? 'http://10.0.2.2:8000/api/v1' : 'http://127.0.0.1:8000/api/v1',
-    connectTimeout: const Duration(seconds: 5),
-    receiveTimeout: const Duration(seconds: 3),
+    baseUrl: Platform.isAndroid 
+        ? AppConfig.getBaseUrl() 
+        : AppConfig.getIosBaseUrl(),
+    connectTimeout: Duration(seconds: AppConfig.connectTimeoutSeconds),
+    receiveTimeout: Duration(seconds: AppConfig.receiveTimeoutSeconds),
   ));
 
   Future<Map<String, dynamic>?> login(String email, String password) async {
-    final response = await _dio.post('/auth/login', data: {
-      'email': email,
-      'password': password,
-    });
-    if (response.statusCode == 200) {
-      return response.data;
+    if (email.isEmpty || password.isEmpty) {
+      AppLogger.error('Login called with empty email or password');
+      return null;
     }
-    return null;
+    try {
+      final response = await _dio.post('/auth/login', data: {
+        'email': email,
+        'password': password,
+      });
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+      return null;
+    } catch (e) {
+      AppLogger.error('Error logging in', e);
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>?> register(Map<String, dynamic> data) async {
@@ -31,7 +44,7 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print('Error registering: $e');
+      AppLogger.error('Error registering', e);
       return null;
     }
   }
@@ -45,12 +58,16 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      print('Error fetching shops: $e');
+      AppLogger.error('Error fetching shops', e);
       return [];
     }
   }
 
   Future<List<Appointment>> getAppointments(String userId) async {
+    if (userId.isEmpty) {
+      AppLogger.error('getAppointments called with empty userId');
+      return [];
+    }
     try {
       final response = await _dio.get('/bookings/', queryParameters: {'customer_id': userId});
       if (response.statusCode == 200) {
@@ -59,7 +76,7 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      print('Error fetching appointments: $e');
+      AppLogger.error('Error fetching appointments', e);
       return [];
     }
   }
@@ -72,12 +89,16 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print('Error creating booking: $e');
+      AppLogger.error('Error creating booking', e);
       return null;
     }
   }
 
   Future<User?> updateProfile(String userId, Map<String, dynamic> data) async {
+    if (userId.isEmpty) {
+      AppLogger.error('updateProfile called with empty userId');
+      return null;
+    }
     try {
       final response = await _dio.put('/profile/$userId', data: data);
       if (response.statusCode == 200) {
@@ -85,12 +106,16 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print('Error updating profile: $e');
+      AppLogger.error('Error updating profile', e);
       return null;
     }
   }
 
   Future<String?> getNavigationLink(String shopId, {double? lat, double? lng}) async {
+    if (shopId.isEmpty) {
+      AppLogger.error('getNavigationLink called with empty shopId');
+      return null;
+    }
     try {
       final response = await _dio.get(
         '/shops/$shopId/navigation',
@@ -99,12 +124,12 @@ class ApiService {
           if (lng != null) 'customer_lng': lng,
         },
       );
-      if (response.statusCode == 200) {
-        return response.data['googleMapsUrl'];
+      if (response.statusCode == 200 && response.data != null) {
+        return response.data['googleMapsUrl'] as String?;
       }
       return null;
     } catch (e) {
-      print('Error fetching navigation link: $e');
+      AppLogger.error('Error fetching navigation link', e);
       return null;
     }
   }
@@ -117,7 +142,7 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print('Error updating permissions: $e');
+      AppLogger.error('Error updating permissions', e);
       return null;
     }
   }
@@ -136,7 +161,7 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print('Error fetching owner analytics: $e');
+      AppLogger.error('Error fetching owner analytics', e);
       return null;
     }
   }
@@ -154,12 +179,16 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print('Error fetching staff earnings: $e');
+      AppLogger.error('Error fetching staff earnings', e);
       return null;
     }
   }
 
   Future<Map<String, dynamic>?> getStaffProfile(String staffId) async {
+    if (staffId.isEmpty) {
+      AppLogger.error('getStaffProfile called with empty staffId');
+      return null;
+    }
     try {
       final response = await _dio.get('/shops/staff/$staffId/profile');
       if (response.statusCode == 200) {
@@ -167,12 +196,16 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print('Error fetching staff profile: $e');
+      AppLogger.error('Error fetching staff profile', e);
       return null;
     }
   }
 
   Future<List<dynamic>> getNotifications(String userId) async {
+    if (userId.isEmpty) {
+      AppLogger.error('getNotifications called with empty userId');
+      return [];
+    }
     try {
       final response = await _dio.get('/notifications/$userId');
       if (response.statusCode == 200) {
@@ -180,7 +213,7 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      print('Error fetching notifications: $e');
+      AppLogger.error('Error fetching notifications', e);
       return [];
     }
   }
@@ -189,7 +222,7 @@ class ApiService {
     try {
       await _dio.put('/notifications/$notifId/read');
     } catch (e) {
-      print('Error marking notification read: $e');
+      AppLogger.error('Error marking notification read', e);
     }
   }
 
@@ -201,15 +234,17 @@ class ApiService {
       });
 
       final response = await _dio.post('/uploads', data: formData);
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 && response.data != null) {
         // Return the full URL
-        final String relativeUrl = response.data['url'];
-        final String baseUrl = _dio.options.baseUrl.replaceAll('/api/v1', '');
-        return '$baseUrl$relativeUrl';
+        final String? relativeUrl = response.data['url'] as String?;
+        if (relativeUrl != null) {
+          final String baseUrl = _dio.options.baseUrl.replaceAll('/api/v1', '');
+          return '$baseUrl$relativeUrl';
+        }
       }
       return null;
     } catch (e) {
-      print('Error uploading file: $e');
+      AppLogger.error('Error uploading file', e);
       return null;
     }
   }
@@ -244,7 +279,7 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print('Error submitting review: $e');
+      AppLogger.error('Error submitting review', e);
       return null;
     }
   }
