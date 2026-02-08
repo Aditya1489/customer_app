@@ -127,9 +127,9 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
         crossAxisSpacing: 16,
         childAspectRatio: 0.8,
       ),
-      itemCount: widget.shop.staff.length,
+      itemCount: widget.shop.staff.where((s) => s.isAvailable).length,
       itemBuilder: (context, index) {
-        final staff = widget.shop.staff[index];
+        final staff = widget.shop.staff.where((s) => s.isAvailable).toList()[index];
         bool isSelected = _selectedStaff?.id == staff.id;
         return InkWell(
           onTap: () => setState(() {

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import 'package:customer_sync/services/mock_data.dart';
 import 'package:customer_sync/models/models.dart';
 import 'package:customer_sync/core/providers/theme_provider.dart';
 import 'package:customer_sync/core/providers/user_provider.dart';
+import 'package:customer_sync/core/providers/locale_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:customer_sync/services/api_service.dart';
@@ -39,6 +42,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
   Position? _currentPosition;
   final MapController _mapController = MapController();
 
+  Timer? _countdownTimer;
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +52,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(userProvider);
       ref.read(notificationServiceProvider).startPolling(user.id);
+    });
+
+    // Start countdown timer
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted && _currentIndex == 1 && _activeAppointmentFilter == 'AWAITING_CUSTOMER_CONFIRMATION') {
+        setState(() {}); // Rebuild to update countdowns
+      }
     });
   }
 
@@ -293,21 +305,36 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: _isLoading 
-            ? const Center(child: CircularProgressIndicator())
-            : _viewingMap
-              ? _buildMapView()
-              : _shops.isEmpty
-                ? Center(child: Text("No shops found near you", style: TextStyle(color: (isDark ? Colors.white : Colors.black).withOpacity(0.4))))
-                : RefreshIndicator(
-                    onRefresh: _loadData,
-                    child: ListView.builder(
+          child: RefreshIndicator(
+            onRefresh: _loadData,
+            color: AppTheme.emerald,
+            child: _isLoading 
+              ? SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Container(
+                    height: MediaQuery.of(context).size.height * 0.6,
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(),
+                  ),
+                )
+              : _viewingMap
+                ? _buildMapView()
+                : _shops.isEmpty
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Container(
+                        height: MediaQuery.of(context).size.height * 0.6,
+                        alignment: Alignment.center,
+                        child: Text("No shops found near you", style: TextStyle(color: (isDark ? Colors.white : Colors.black).withOpacity(0.4))),
+                      ),
+                    )
+                  : ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
                       physics: const AlwaysScrollableScrollPhysics(),
                       itemCount: _shops.length,
                       itemBuilder: (context, index) => _buildShopCard(_shops[index]),
                     ),
-                  ),
+          ),
         ),
       ],
     );
@@ -556,12 +583,19 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
   Widget _buildAppointmentsTab() {
     final categories = [
       {'id': 'PENDING', 'label': 'Pending'},
-      {'id': 'ACCEPTED', 'label': 'Accepted'},
+      {'id': 'AWAITING_CUSTOMER_CONFIRMATION', 'label': 'Confirm (₹1)'},
+      {'id': 'CONFIRMED', 'label': 'Accepted'},
       {'id': 'COMPLETED', 'label': 'Completed'},
       {'id': 'CANCELLED', 'label': 'Cancelled'}
     ];
 
-    final filtered = _appointments.where((a) => a.status.toString().split('.').last.toUpperCase() == _activeAppointmentFilter).toList();
+    final filtered = _appointments.where((a) {
+      final statusStr = a.status.name.replaceAll(RegExp(r'(?=[A-Z])'), '_').toUpperCase();
+      if (_activeAppointmentFilter == 'CANCELLED') {
+        return statusStr.contains('CANCELLED');
+      }
+      return statusStr == _activeAppointmentFilter;
+    }).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -615,23 +649,29 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
         ),
         const SizedBox(height: 16),
         Expanded(
-          child: filtered.isEmpty
-              ? Center(
-                  child: Opacity(
-                    opacity: 0.4,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(LucideIcons.calendar, size: 64, color: (isDark ? Colors.white : Colors.black).withOpacity(0.4)),
-                        const SizedBox(height: 16),
-                        Text("No appointments found", style: TextStyle(fontWeight: FontWeight.bold, color: (isDark ? Colors.white : Colors.black).withOpacity(0.4))),
-                      ],
+          child: RefreshIndicator(
+            onRefresh: _loadData,
+            color: AppTheme.emerald,
+            child: filtered.isEmpty
+                ? SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Container(
+                      height: MediaQuery.of(context).size.height * 0.6,
+                      alignment: Alignment.center,
+                      child: Opacity(
+                        opacity: 0.4,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(LucideIcons.calendar, size: 64, color: (isDark ? Colors.white : Colors.black).withOpacity(0.4)),
+                            const SizedBox(height: 16),
+                            Text("No appointments found", style: TextStyle(fontWeight: FontWeight.bold, color: (isDark ? Colors.white : Colors.black).withOpacity(0.4))),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: ListView.builder(
+                  )
+                : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: filtered.length,
@@ -647,12 +687,18 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isDark ? AppTheme.darkCardBG : Colors.white,
+                        child: ClipRRect(
                           borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: Column(
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isDark ? AppTheme.darkCardBG : Colors.white.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(24),
+                                border: isDark ? Border.all(color: Colors.white.withOpacity(0.05)) : Border.all(color: Colors.black.withOpacity(0.05)),
+                              ),
+                              child: Column(
                           children: [
                             Row(
                               children: [
@@ -683,6 +729,79 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                                 Icon(LucideIcons.chevronRight, size: 20, color: (isDark ? Colors.white : Colors.black).withOpacity(0.2)),
                               ],
                             ),
+                            // Show Pay ₹1 button for AWAITING_CUSTOMER_CONFIRMATION
+                            if (_activeAppointmentFilter == 'AWAITING_CUSTOMER_CONFIRMATION')
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Column(
+                                  children: [
+                                    if (appt.expiresAt != null)
+                                      Builder(
+                                        builder: (context) {
+                                          final remaining = appt.expiresAt!.difference(DateTime.now());
+                                          if (remaining.isNegative) {
+                                            return const Padding(
+                                              padding: EdgeInsets.only(bottom: 8.0),
+                                              child: Text('EXPIRED', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                                            );
+                                          }
+                                          final minutes = remaining.inMinutes;
+                                          final seconds = remaining.inSeconds % 60;
+                                          return Padding(
+                                            padding: const EdgeInsets.only(bottom: 8.0),
+                                            child: Text(
+                                              'Confirm within ${minutes}:${seconds.toString().padLeft(2, '0')}',
+                                              style: TextStyle(
+                                                color: Colors.orange.shade700,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    InkWell(
+                                      onTap: () async {
+                                        setState(() => _isLoading = true);
+                                        try {
+                                          final apiService = ref.read(apiServiceProvider);
+                                          await apiService.post('/bookings/${appt.id}/confirm-payment', {});
+                                          _loadData();
+                                        } catch (e) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Payment failed: $e')),
+                                          );
+                                        } finally {
+                                          setState(() => _isLoading = false);
+                                        }
+                                      },
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: Colors.green.withOpacity(0.3)),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(LucideIcons.creditCard, size: 16, color: Colors.green.shade700),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Pay ₹1 to Confirm Slot',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.green.shade700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             // Show Rate button for completed appointments
                             if (_activeAppointmentFilter == 'COMPLETED')
                               Padding(
@@ -723,9 +842,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                               ),
                           ],
                         ),
-                      );
-                    },
+                      ),
+                    ),
                   ),
+                );
+              },
+            ),
                 ),
         ),
       ],
@@ -735,13 +857,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
 
 
   Widget _buildProfileTab() {
-    return SingleChildScrollView(
-      physics: const ClampingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 48, 16, 80),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 48, 16, 12),
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text("Profile", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black)),
@@ -759,6 +879,21 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
               ),
             ],
           ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _loadData,
+            color: AppTheme.emerald,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
           const SizedBox(height: 24),
           // Profile Card
           Container(
@@ -803,9 +938,46 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
           _buildProfileItem(LucideIcons.user, "Edit Profile", isDark ? Colors.amber : AppTheme.lightAccent, () {
             context.push('/edit-profile');
           }),
-          const SizedBox(height: 16),
           _buildProfileItem(LucideIcons.shield, "Manage Permissions", isDark ? Colors.amber : AppTheme.lightAccent, () {
             context.push('/manage-permissions');
+          }),
+          const SizedBox(height: 16),
+          _buildProfileItem(
+            LucideIcons.languages,
+            "Language / भाषा",
+            Colors.indigo,
+            () => context.push('/language-selection'),
+            subtitle: _getCurrentLanguageName(ref.watch(localeProvider)),
+          ),
+          const SizedBox(height: 16),
+          _buildProfileItem(LucideIcons.fileText, "Privacy Policy", isDark ? Colors.amber : AppTheme.lightAccent, () {
+            // Placeholder: Show a dialog or navigate to a webview
+            showAboutDialog(context: context, applicationName: 'BarberBook24', children: [const Text('Privacy Policy details...')]);
+          }),
+          const SizedBox(height: 16),
+          _buildProfileItem(LucideIcons.scale, "Terms of Service", isDark ? Colors.amber : AppTheme.lightAccent, () {
+             showAboutDialog(context: context, applicationName: 'BarberBook24', children: [const Text('Terms of service details...')]);
+          }),
+          const SizedBox(height: 16),
+          _buildProfileItem(LucideIcons.trash2, "Delete Account", Colors.red, () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Delete Account?'),
+                content: const Text('This action is permanent and will remove all your booking history.'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                  TextButton(
+                    onPressed: () {
+                      // Call delete API
+                      Navigator.pop(context);
+                      context.go('/login');
+                    },
+                    child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                  ),
+                ],
+              ),
+            );
           }),
           const SizedBox(height: 40),
           // Logout Button
@@ -828,10 +1000,14 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  ),
+),
+],
+);
+}
 
-  Widget _buildProfileItem(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _buildProfileItem(IconData icon, String label, Color color, VoidCallback onTap, {String? subtitle}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
@@ -846,12 +1022,44 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
           children: [
             Icon(icon, color: color, size: 22),
             const SizedBox(width: 20),
-            Expanded(child: Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black))),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black)),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: (isDark ? Colors.white : Colors.black).withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
             Icon(LucideIcons.chevronRight, size: 18, color: (isDark ? Colors.white : Colors.black).withOpacity(0.3)),
           ],
         ),
       ),
     );
+  }
+
+  String _getCurrentLanguageName(Locale locale) {
+    switch (locale.languageCode) {
+      case 'en':
+        return 'English';
+      case 'hi':
+        return 'हिंदी';
+      case 'es':
+        return 'Español';
+      case 'ar':
+        return 'العربية';
+      default:
+        return 'English';
+    }
   }
 
   Widget _buildFilterChip(String label, bool isSelected) {

@@ -13,25 +13,29 @@ class AppConfig {
   // For development, you can use environment variables or const values
   static const String _defaultBaseUrl = 'http://10.0.2.2:8000/api/v1';
   static const String _iosBaseUrl = 'http://127.0.0.1:8000/api/v1';
+  static const String _productionBaseUrl = 'https://backend-barber-zb9j.onrender.com/api/v1';
+  
+  // Set to false to use local development server
+  static const bool useProduction = false;
   
   /// Get the base URL based on the platform
   static String getBaseUrl() {
-    // Check for environment variable first (if using flutter_dotenv)
-    // For now, use platform detection
-    if (const bool.fromEnvironment('USE_LOCALHOST', defaultValue: false)) {
-      return _iosBaseUrl;
+    if (useProduction) {
+      return _productionBaseUrl;
     }
     
-    // Platform-specific URLs
-    // Note: For physical iOS devices, you'll need to replace _iosBaseUrl 
-    // with your computer's actual IP address
-    return _defaultBaseUrl;
+    // For local Android emulator (use 10.0.2.2) or Physical Device (use Mac IP)
+    return 'http://192.168.0.122:8000/api/v1';
   }
   
   /// Get iOS-specific base URL
   /// For physical devices, replace with your computer's IP: 'http://YOUR_IP:8000/api/v1'
   static String getIosBaseUrl() {
-    return _iosBaseUrl;
+    if (useProduction) {
+      return _productionBaseUrl;
+    }
+    // Use Mac's local IP for all devices (Simulator & Physical)
+    return 'http://192.168.0.122:8000/api/v1';
   }
   
   /// Connection timeout in seconds

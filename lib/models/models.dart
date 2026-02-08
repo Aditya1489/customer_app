@@ -6,10 +6,14 @@ enum AppRole {
 
 enum AppointmentStatus {
   pending,
-  accepted,
-  cancelled,
+  awaitingCustomerConfirmation,
+  confirmed,
+  inProgress,
   completed,
+  cancelledByCustomer,
+  cancelledByBarber,
   noShow,
+  expired,
 }
 
 class Service {
@@ -51,6 +55,8 @@ class Staff {
   final List<String> services;
   final String? shopId;
 
+  final bool isAvailable;
+
   Staff({
     required this.id,
     required this.name,
@@ -63,6 +69,7 @@ class Staff {
     required this.workPhotos,
     required this.services,
     this.shopId,
+    this.isAvailable = true,
   });
 
   factory Staff.fromJson(Map<String, dynamic> json) {
@@ -78,6 +85,7 @@ class Staff {
       workPhotos: List<String>.from(json['workPhotos'] ?? []),
       services: List<String>.from(json['services'] ?? []),
       shopId: json['shopId'],
+      isAvailable: json['isAvailable'] ?? true,
     );
   }
 }
@@ -148,7 +156,10 @@ class Appointment {
     required this.totalAmount,
     required this.totalDuration,
     required this.bookedAt,
+    this.expiresAt,
   });
+
+  final DateTime? expiresAt;
 
   factory Appointment.fromJson(Map<String, dynamic> json) {
     return Appointment(
@@ -169,6 +180,7 @@ class Appointment {
       totalAmount: (json['totalAmount'] ?? 0.0).toDouble(),
       totalDuration: json['totalDuration'] ?? 0,
       bookedAt: json['bookedAt'] ?? '',
+      expiresAt: json['expiresAt'] != null ? DateTime.parse(json['expiresAt']) : null,
     );
   }
 }

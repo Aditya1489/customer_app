@@ -10,6 +10,7 @@ import 'package:customer_sync/features/customer/submit_review_screen.dart';
 import 'package:customer_sync/features/customer/shop_preview_screen.dart';
 import 'package:customer_sync/features/customer/staff_preview_screen.dart';
 import 'package:customer_sync/features/customer/booking_screen.dart';
+import 'package:customer_sync/features/common/language_selection_screen.dart';
 import 'package:customer_sync/models/models.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -67,6 +68,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           final staff = extras['staff'] as Staff?;
           return BookingScreen(shop: shop, initialStaff: staff);
         },
+      ),
+      GoRoute(
+        path: '/language-selection',
+        builder: (context, state) => const LanguageSelectionScreen(),
       ),
     ],
   );
