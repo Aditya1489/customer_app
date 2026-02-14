@@ -23,53 +23,93 @@ class _RegistrationFlowScreenState extends ConsumerState<RegistrationFlowScreen>
   late bool isDark;
 
   // Customer states
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  // Customer states
+  late final TextEditingController _nameController;
+
+  @override
+  void initState() {
+    super.initState();
+    final currentUser = ref.read(userProvider);
+    _nameController = TextEditingController(text: currentUser?.name ?? "");
+  }
 
   Future<void> _handleFinish() async {
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _phoneController.text.isEmpty ||
-        _passwordController.text.isEmpty) {
+    print("DEBUG: _handleFinish called");
+    if (_nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill in all fields.")),
+        const SnackBar(content: Text("Please enter your name.")),
       );
       return;
     }
 
     setState(() => _isLoading = true);
     final apiService = ref.read(apiServiceProvider);
+    final currentUser = ref.read(userProvider);
+    
+    if (currentUser == null) {
+       print("DEBUG: currentUser is null");
+       ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("User session not found. Please login again.")),
+      );
+       setState(() => _isLoading = false);
+       return;
+    }
+
+    print("DEBUG: Current User ID: ${currentUser.id}");
 
     try {
-      final registrationData = {
-        'name': _nameController.text,
-        'email': _emailController.text,
-        'phone': _phoneController.text,
-        'password': _passwordController.text,
-        'role': _selectedRole,
-      };
-
-      final response = await apiService.register(registrationData);
+      User? effectiveUser;
       
-      if (response != null && response['user'] != null) {
-        final userData = User.fromJson(response['user']);
-        ref.read(userProvider.notifier).state = userData;
+      if (currentUser.id == 'temp') {
+        // 1. New Registration
+        print("DEBUG: Starting new registration");
+        final registerData = {
+          'name': _nameController.text.trim(),
+          'role': 'CUSTOMER',
+          'email': null,
+          'agreedToPrivacy': true, // Simple consent for customer
+          'agreedToTerms': true,
+          'legalConsentName': _nameController.text.trim(),
+          'legalConsentPlace': 'App Registration',
+          'legalConsentTimestamp': DateTime.now().toIso8601String(),
+        };
+        print("DEBUG: Register Payload: $registerData");
+        
+        final regResponse = await apiService.registerUser(currentUser.token!, registerData);
+        print("DEBUG: Register Response: $regResponse");
+
+        if (regResponse == null) throw Exception("Registration failed (response was null).");
+        
+        final newUser = User.fromJson(regResponse['user']);
+        effectiveUser = newUser.copyWith(token: regResponse['access_token']);
+      } else {
+        // 2. Existing User Update
+        print("DEBUG: Updating existing user profile");
+        final profileData = {'name': _nameController.text.trim()};
+        effectiveUser = await apiService.updateProfile(currentUser.id, profileData);
+        print("DEBUG: Update Profile Result: ${effectiveUser != null ? 'Success' : 'Fail'}");
+      }
+      
+      if (effectiveUser != null) {
+        print("DEBUG: Successfully set user");
+        await ref.read(userProvider.notifier).setUser(effectiveUser);
 
         if (mounted) {
           setState(() => _isLoading = false);
           context.go('/customer');
         }
       } else {
+        print("DEBUG: effectiveUser is null");
         if (mounted) {
           setState(() => _isLoading = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Registration failed. Please try again.")),
+            const SnackBar(content: Text("Profile update failed. Please try again.")),
           );
         }
       }
-    } catch (e) {
+    } catch (e, stack) {
+      print("DEBUG: Error in _handleFinish: $e");
+      print(stack);
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -104,18 +144,12 @@ class _RegistrationFlowScreenState extends ConsumerState<RegistrationFlowScreen>
           const SizedBox(height: 60),
           _buildBackButton(() => context.pop()),
           const SizedBox(height: 24),
-          const Text("Create Account", style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
-          const Opacity(opacity: 0.4, child: Text("Join BarberSync to book your next grooming session.")),
+          const Text("Complete Profile", style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
+          const Opacity(opacity: 0.4, child: Text("Tell us a bit about yourself to get started.")),
           const SizedBox(height: 40),
           _buildInput("Full Name", "John Doe", _nameController, icon: LucideIcons.user),
-          const SizedBox(height: 16),
-          _buildInput("Email Address", "john@example.com", _emailController, icon: LucideIcons.mail, keyboardType: TextInputType.emailAddress),
-          const SizedBox(height: 16),
-          _buildInput("Phone Number", "+1 234 567 890", _phoneController, icon: LucideIcons.phone, keyboardType: TextInputType.phone),
-          const SizedBox(height: 16),
-          _buildInput("Password", "••••••••", _passwordController, icon: LucideIcons.lock, isPassword: true),
           const SizedBox(height: 48),
-          _buildPrimaryButton("SIGN UP & START", _handleFinish),
+          _buildPrimaryButton("COMPLETE SETUP", _handleFinish),
           const SizedBox(height: 40),
         ],
       ),

@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // Dark Theme Colors (The Modern Grooming Lounge)
-  static const darkBGStart = Color(0xFF0B0F0E); // Deep Obsidian
-  static const darkBGMiddle = Color(0xFF060908); // Even deeper
-  static const darkBGEnd = Color(0xFF052116);   // Deep Dark Green (for mesh gradient)
+  // Dark Theme Colors (Sync with Barber App)
+  static const darkBGStart = Color(0xFF000000);
+  static const darkBGMiddle = Color(0xFF18181B); // zinc-900
+  static const darkBGEnd = Color(0xFF450A0A);   // red-950
   
-  static const darkCardBG = Color(0xAA0F1716); // semi-transparent obsidian
-  static const darkAccent = Color(0xFFF59E0B); // Vibrant Amber
-  static const darkButton = Color(0xFF10B981); // Emerald Green
+  static const darkCardBG = Color(0xCC18181B); // zinc-900 with opacity
+  static const darkAccent = Color(0xFFEAB308); // yellow-500
+  static const darkButton = Color(0xFFDC2626); // red-600
   static const emerald = Color(0xFF10B981);    // emerald-500
   static const mutedRed = Color(0xFF991B1B);   // muted red
 
@@ -30,7 +30,7 @@ class AppTheme {
   static ThemeData getDarkTheme() {
     return ThemeData(
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.transparent,
+      scaffoldBackgroundColor: darkBGStart,
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       cardTheme: CardThemeData(
         color: darkCardBG,
@@ -52,7 +52,7 @@ class AppTheme {
   static ThemeData getLightTheme() {
     return ThemeData(
       brightness: Brightness.light,
-      scaffoldBackgroundColor: Colors.transparent,
+      scaffoldBackgroundColor: lightBGStart,
       textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
       cardTheme: CardThemeData(
         color: lightCardBG,

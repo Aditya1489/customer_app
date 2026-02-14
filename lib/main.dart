@@ -12,7 +12,11 @@ void main() async {
   
   // Initialize Notifications
   final container = ProviderContainer();
-  await container.read(notificationServiceProvider).initialize();
+  try {
+    await container.read(notificationServiceProvider).initialize();
+  } catch (e) {
+    debugPrint("Failed to initialize notification service: $e");
+  }
 
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(
@@ -20,8 +24,8 @@ void main() async {
       statusBarColor: Colors.transparent,
       systemNavigationBarColor: Colors.transparent,
       systemNavigationBarDividerColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarIconBrightness: Brightness.dark,
       systemNavigationBarContrastEnforced: false, // Critical for transparent nav bar
     ),
   );

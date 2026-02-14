@@ -21,14 +21,16 @@ class _ManagePermissionsScreenState extends ConsumerState<ManagePermissionsScree
 
   void _togglePermission(String key, bool value) async {
     final user = ref.read(userProvider);
+    if (user == null) return;
+    
     final apiService = ref.read(apiServiceProvider);
     
     // Optimistic update
-    final nextPermissions = Map<String, bool>.from(user.permissions);
+    final nextPermissions = Map<String, bool>.from(user!.permissions);
     nextPermissions[key] = value;
     
     final updatedUser = User(
-      id: user.id,
+      id: user!.id,
       name: user.name,
       email: user.email,
       phone: user.phone,
@@ -37,18 +39,18 @@ class _ManagePermissionsScreenState extends ConsumerState<ManagePermissionsScree
       permissions: nextPermissions,
     );
     
-    ref.read(userProvider.notifier).state = updatedUser;
-
+    await ref.read(userProvider.notifier).setUser(updatedUser);
+ 
     // Persist to backend
     try {
-      await apiService.updatePermissions(user.id, {key: value});
+      await apiService.updatePermissions(user!.id, {key: value});
     } catch (e) {
       // Revert on error
-      ref.read(userProvider.notifier).state = user;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to update permission on server')),
-        );
+         await ref.read(userProvider.notifier).setUser(user);
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('Failed to update permission on server')),
+         );
       }
     }
   }
@@ -101,7 +103,7 @@ class _ManagePermissionsScreenState extends ConsumerState<ManagePermissionsScree
               icon: LucideIcons.mapPin,
               title: 'Location',
               subtitle: 'Allow app to access your location for nearby shops',
-              value: ref.watch(userProvider).permissions['location'] ?? false,
+              value: ref.watch(userProvider)?.permissions['location'] ?? false,
               onChanged: (value) => _togglePermission('location', value),
             ),
             
@@ -109,7 +111,7 @@ class _ManagePermissionsScreenState extends ConsumerState<ManagePermissionsScree
               icon: LucideIcons.bell,
               title: 'Notifications',
               subtitle: 'Receive booking confirmations and reminders',
-              value: ref.watch(userProvider).permissions['notifications'] ?? false,
+              value: ref.watch(userProvider)?.permissions['notifications'] ?? false,
               onChanged: (value) => _togglePermission('notifications', value),
             ),
             
@@ -117,7 +119,7 @@ class _ManagePermissionsScreenState extends ConsumerState<ManagePermissionsScree
               icon: LucideIcons.camera,
               title: 'Camera',
               subtitle: 'Take photos for profile picture',
-              value: ref.watch(userProvider).permissions['camera'] ?? false,
+              value: ref.watch(userProvider)?.permissions['camera'] ?? false,
               onChanged: (value) => _togglePermission('camera', value),
             ),
             
@@ -125,7 +127,7 @@ class _ManagePermissionsScreenState extends ConsumerState<ManagePermissionsScree
               icon: LucideIcons.folder,
               title: 'Storage',
               subtitle: 'Save booking receipts and photos',
-              value: ref.watch(userProvider).permissions['storage'] ?? false,
+              value: ref.watch(userProvider)?.permissions['storage'] ?? false,
               onChanged: (value) => _togglePermission('storage', value),
             ),
             

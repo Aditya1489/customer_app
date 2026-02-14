@@ -39,6 +39,15 @@ final mockStaff = [
       'https://images.unsplash.com/photo-1593702288066-620428aff6f0?w=800',
     ],
     services: ['s1', 's2', 's3'],
+    skills: 'Classic Cuts, Skin Fade, Beard Sculpting, Straight Razor',
+    workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    workingHours: {
+      'Mon': {'start': '09:00', 'end': '18:00'},
+      'Tue': {'start': '09:00', 'end': '18:00'},
+      'Wed': {'start': '09:00', 'end': '18:00'},
+      'Thu': {'start': '09:00', 'end': '18:00'},
+      'Fri': {'start': '09:00', 'end': '20:00'},
+    },
   ),
   Staff(
     id: 'st2',
@@ -54,6 +63,15 @@ final mockStaff = [
       'https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?w=800',
     ],
     services: ['s1', 's2'],
+    skills: 'Modern Styling, Texturing, Scissor Work',
+    workingDays: ['Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    workingHours: {
+      'Tue': {'start': '10:00', 'end': '19:00'},
+      'Wed': {'start': '10:00', 'end': '19:00'},
+      'Thu': {'start': '10:00', 'end': '19:00'},
+      'Fri': {'start': '10:00', 'end': '19:00'},
+      'Sat': {'start': '09:00', 'end': '17:00'},
+    },
   ),
 ];
 

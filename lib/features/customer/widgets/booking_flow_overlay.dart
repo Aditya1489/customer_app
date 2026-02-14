@@ -408,11 +408,19 @@ class _BookingFlowOverlayState extends ConsumerState<BookingFlowOverlay> {
             try {
               final apiService = ref.read(apiServiceProvider);
               final user = ref.read(userProvider);
+              if (user == null) {
+                if (mounted) {
+                   ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("You must be logged in to book")),
+                  );
+                }
+                return;
+              }
               
               final bookingData = {
                 'shopId': widget.shop.id,
                 'staffId': _selectedStaff!.id,
-                'customerId': user.id,
+                'customerId': user!.id,
                 'services': _selectedServiceIds,
                 'date': _selectedDate!,
                 'timeSlot': _selectedSlot!,

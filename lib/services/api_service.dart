@@ -16,35 +16,48 @@ class ApiService {
     receiveTimeout: Duration(seconds: AppConfig.receiveTimeoutSeconds),
   ));
 
-  Future<Map<String, dynamic>?> login(String email, String password) async {
-    if (email.isEmpty || password.isEmpty) {
-      AppLogger.error('Login called with empty email or password');
-      return null;
-    }
+  // OTP Authentication
+  Future<bool> requestOtp(String phone) async {
     try {
-      final response = await _dio.post('/auth/login', data: {
-        'email': email,
-        'password': password,
+      final response = await _dio.post('/auth/otp/request', data: {
+        'phone': phone,
+      });
+      return response.statusCode == 200;
+    } catch (e) {
+      AppLogger.error('Error requesting OTP', e);
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> verifyOtp(String phone, String code) async {
+    try {
+      final response = await _dio.post('/auth/otp/verify', data: {
+        'phone': phone,
+        'code': code,
       });
       if (response.statusCode == 200) {
         return response.data;
       }
       return null;
     } catch (e) {
-      AppLogger.error('Error logging in', e);
+      AppLogger.error('Error verifying OTP', e);
       return null;
     }
   }
 
-  Future<Map<String, dynamic>?> register(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> selectRole(String userId, String role, String shopId) async {
     try {
-      final response = await _dio.post('/auth/register', data: data);
-      if (response.statusCode == 201) {
+      final response = await _dio.post('/auth/login/select-role', data: {
+        'user_id': userId,
+        'role': role,
+        'shop_id': shopId,
+      });
+      if (response.statusCode == 200) {
         return response.data;
       }
       return null;
     } catch (e) {
-      AppLogger.error('Error registering', e);
+      AppLogger.error('Error selecting role', e);
       return null;
     }
   }
@@ -107,6 +120,23 @@ class ApiService {
       return null;
     } catch (e) {
       AppLogger.error('Error updating profile', e);
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> registerUser(String token, Map<String, dynamic> data) async {
+    try {
+      final response = await _dio.post(
+        '/auth/register',
+        data: data,
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+      return null;
+    } catch (e) {
+      AppLogger.error('Error registering user', e);
       return null;
     }
   }
@@ -282,5 +312,117 @@ class ApiService {
       AppLogger.error('Error submitting review', e);
       return null;
     }
+  }
+
+  // Get navigation route from backend (uses secure Google Directions API proxy)
+  Future<Map<String, dynamic>?> getNavigationRoute({
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/navigation/route',
+        queryParameters: {
+          'origin_lat': originLat,
+          'origin_lng': originLng,
+          'dest_lat': destLat,
+          'dest_lng': destLng,
+        },
+      );
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+      return null;
+    } catch (e) {
+      AppLogger.error('Error fetching navigation route', e);
+      return null;
+    }
+  }
+
+  // Shop Management
+  Future<Map<String, dynamic>?> getShop(String shopId) async {
+    try {
+      final response = await _dio.get('/shops/$shopId');
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+      return null;
+    } catch (e) {
+      AppLogger.error('Error fetching shop', e);
+      return null;
+    }
+  }
+
+  Future<List<dynamic>> getShopServices(String shopId) async {
+    try {
+      final response = await _dio.get('/shops/$shopId/services');
+      if (response.statusCode == 200) {
+        return response.data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      AppLogger.error('Error fetching shop services', e);
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getPopularServices(String shopId) async {
+    try {
+      final response = await _dio.get('/shops/$shopId/services/popular');
+      if (response.statusCode == 200) {
+        return response.data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      AppLogger.error('Error fetching popular services', e);
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getShopStaff(String shopId) async {
+    try {
+      final response = await _dio.get('/shops/$shopId/staff');
+      if (response.statusCode == 200) {
+        return response.data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      AppLogger.error('Error fetching shop staff', e);
+      return [];
+    }
+  }
+
+  // Shop Reviews
+  Future<List<dynamic>> getShopReviews(String shopId) async {
+    try {
+      final response = await _dio.get('/reviews/shop/$shopId');
+      if (response.statusCode == 200) {
+        return response.data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      AppLogger.error('Error fetching shop reviews', e);
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getShopReviewStats(String shopId) async {
+    try {
+      final response = await _dio.get('/reviews/shop/$shopId/stats');
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+      return null;
+    } catch (e) {
+      AppLogger.error('Error fetching shop review stats', e);
+      return null;
+    }
+  }
+
+  // Generic POST method
+  Future<Response> post(String path, Map<String, dynamic> data) async {
+    return await _dio.post(path, data: data);
   }
 }

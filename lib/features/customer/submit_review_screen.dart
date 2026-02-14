@@ -37,13 +37,22 @@ class _SubmitReviewScreenState extends ConsumerState<SubmitReviewScreen> {
     setState(() => _isSubmitting = true);
 
     final user = ref.read(userProvider);
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("You must be logged in to submit a review")),
+        );
+      }
+      setState(() => _isSubmitting = false); // Reset submitting state if user is null
+      return;
+    }
     final api = ref.read(apiServiceProvider);
     
     final reviewData = {
       'shopId': widget.bookingData['shopId'],
       'staffId': widget.bookingData['staffId'],
-      'customerId': user.id,
-      'customerName': user.name,
+      'customerId': user!.id,
+      'customerName': user!.name,
       'rating': _selectedRating,
       'comment': _commentController.text.trim(),
     };

@@ -8,14 +8,16 @@
 /// To find your local IP:
 /// - macOS/Linux: Run `ifconfig` or `ip addr` and look for your local network IP
 /// - Windows: Run `ipconfig` and look for IPv4 Address
+import 'package:flutter/foundation.dart';
+
 class AppConfig {
   // Base API URL - Update this with your server's IP address
   // For development, you can use environment variables or const values
   static const String _defaultBaseUrl = 'http://10.0.2.2:8000/api/v1';
   static const String _iosBaseUrl = 'http://127.0.0.1:8000/api/v1';
-  static const String _productionBaseUrl = 'https://backend-barber-zb9j.onrender.com/api/v1';
+  static const String _productionBaseUrl = 'https://barberbook-backend-2z4zb4qcua-uc.a.run.app/api/v1';
   
-  // Set to false to use local development server
+  // Set to true to use Production backend, false for local development
   static const bool useProduction = false;
   
   /// Get the base URL based on the platform
@@ -25,7 +27,9 @@ class AppConfig {
     }
     
     // For local Android emulator (use 10.0.2.2) or Physical Device (use Mac IP)
-    return 'http://192.168.0.122:8000/api/v1';
+    final url = 'http://192.168.0.104:8000/api/v1';
+    debugPrint("🏠 LOCAL MODE: getBaseUrl returning $url");
+    return url;
   }
   
   /// Get iOS-specific base URL
@@ -35,12 +39,14 @@ class AppConfig {
       return _productionBaseUrl;
     }
     // Use Mac's local IP for all devices (Simulator & Physical)
-    return 'http://192.168.0.122:8000/api/v1';
+    final url = 'http://192.168.0.104:8000/api/v1';
+    debugPrint("🎯 DEBUG: getIosBaseUrl returning $url");
+    return url;
   }
   
   /// Connection timeout in seconds
-  static const int connectTimeoutSeconds = 10;
+  static const int connectTimeoutSeconds = 30;
   
   /// Receive timeout in seconds  
-  static const int receiveTimeoutSeconds = 10;
+  static const int receiveTimeoutSeconds = 30;
 }

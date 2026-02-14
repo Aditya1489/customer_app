@@ -55,6 +55,9 @@ class Staff {
   final List<String> services;
   final String? shopId;
 
+  final String skills;
+  final List<String> workingDays;
+  final Map<String, dynamic> workingHours;
   final bool isAvailable;
 
   Staff({
@@ -68,6 +71,9 @@ class Staff {
     required this.imageUrl,
     required this.workPhotos,
     required this.services,
+    this.skills = '',
+    this.workingDays = const [],
+    this.workingHours = const {},
     this.shopId,
     this.isAvailable = true,
   });
@@ -81,9 +87,12 @@ class Staff {
       rating: (json['rating'] ?? 0.0).toDouble(),
       reviewsCount: json['reviewsCount'] ?? 0,
       description: json['description'] ?? '',
-      imageUrl: json['imageUrl'] ?? '',
+      imageUrl: json['imageUrl'] ?? json['profilePhoto'] ?? json['photo'] ?? '',
       workPhotos: List<String>.from(json['workPhotos'] ?? []),
       services: List<String>.from(json['services'] ?? []),
+      skills: json['skills'] ?? '',
+      workingDays: List<String>.from(json['workingDays'] ?? []),
+      workingHours: Map<String, dynamic>.from(json['workingHours'] ?? {}),
       shopId: json['shopId'],
       isAvailable: json['isAvailable'] ?? true,
     );
@@ -101,6 +110,8 @@ class BarberShop {
   final Map<String, double> coordinates;
   final List<Staff> staff;
   final List<Service> services;
+  final Map<String, dynamic> hours;
+  final bool isAvailable;
 
   BarberShop({
     required this.id,
@@ -113,6 +124,8 @@ class BarberShop {
     required this.coordinates,
     required this.staff,
     required this.services,
+    this.hours = const {},
+    this.isAvailable = true,
   });
 
   factory BarberShop.fromJson(Map<String, dynamic> json) {
@@ -124,9 +137,13 @@ class BarberShop {
       rating: (json['rating'] ?? 0.0).toDouble(),
       reviewsCount: json['reviewsCount'] ?? 0,
       photos: List<String>.from(json['photos'] ?? []),
-      coordinates: Map<String, double>.from(json['coordinates'] ?? {}),
+      coordinates: (json['coordinates'] as Map<String, dynamic>?)?.map(
+            (key, value) => MapEntry(key, (value as num).toDouble()),
+          ) ?? {},
       staff: (json['staff'] as List? ?? []).map((e) => Staff.fromJson(e)).toList(),
       services: (json['services'] as List? ?? []).map((e) => Service.fromJson(e)).toList(),
+      hours: Map<String, dynamic>.from(json['hours'] ?? {}),
+      isAvailable: json['isAvailable'] ?? true,
     );
   }
 }
@@ -193,6 +210,7 @@ class User {
   final AppRole role;
   final String? profilePhoto;
   final Map<String, bool> permissions;
+  final String? token;
 
   User({
     required this.id,
@@ -202,6 +220,7 @@ class User {
     required this.role,
     this.profilePhoto,
     required this.permissions,
+    this.token,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -216,6 +235,42 @@ class User {
       ),
       profilePhoto: json['profilePhoto'],
       permissions: Map<String, bool>.from(json['permissions'] ?? {}),
+      token: json['token'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'role': role.name.toUpperCase(),
+      'profilePhoto': profilePhoto,
+      'permissions': permissions,
+      'token': token,
+    };
+  }
+
+  User copyWith({
+    String? id,
+    String? name,
+    String? email,
+    String? phone,
+    AppRole? role,
+    String? profilePhoto,
+    Map<String, bool>? permissions,
+    String? token,
+  }) {
+    return User(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      role: role ?? this.role,
+      profilePhoto: profilePhoto ?? this.profilePhoto,
+      permissions: permissions ?? this.permissions,
+      token: token ?? this.token,
     );
   }
 }

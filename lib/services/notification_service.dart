@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:customer_sync/services/api_service.dart';
@@ -19,8 +21,17 @@ class NotificationService {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
+    const DarwinInitializationSettings initializationSettingsDarwin =
+        DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
     const InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
+      iOS: initializationSettingsDarwin,
+      macOS: initializationSettingsDarwin,
     );
 
     await _flutterLocalNotificationsPlugin.initialize(
@@ -31,11 +42,26 @@ class NotificationService {
       },
     );
     
-    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-        _flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-            
-    await androidImplementation?.requestNotificationsPermission();
+    // Platform-specific permissions
+    try {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+            _flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>();
+        await androidImplementation?.requestNotificationsPermission();
+      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+        final IOSFlutterLocalNotificationsPlugin? iosImplementation =
+            _flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin>();
+        await iosImplementation?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
+    } catch (e) {
+      print("Error requesting notification permissions: $e");
+    }
   }
 
   void startPolling(String userId) {
@@ -56,6 +82,9 @@ class NotificationService {
       final apiService = _ref.read(apiServiceProvider);
       final notifications = await apiService.getNotifications(userId);
       print("Fetched ${notifications.length} notifications from server");
+      if (notifications.isNotEmpty) {
+        print("🔍 First notification: ${notifications.first}");
+      }
       
       bool foundNew = false;
       int unreadCount = 0;

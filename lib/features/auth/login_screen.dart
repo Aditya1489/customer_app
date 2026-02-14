@@ -18,18 +18,59 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderStateMixin {
-  bool isLogin = true;
-  String? selectedRole = "CUSTOMER"; // Default to CUSTOMER to skip selection
+  bool isLogin = true; // Still useful for UI text, though flow is same
+  String? selectedRole = "CUSTOMER"; 
   late bool isDark;
   bool _isLoading = false;
+  bool _isOtpSent = false;
 
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
 
-  Future<void> _handleLogin() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+  Future<void> _handlePhoneSubmit() async {
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+    
+    if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter email and password")),
+        const SnackBar(content: Text("Please enter your full name")),
+      );
+      return;
+    }
+    
+    if (phone.isEmpty || phone.length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a valid phone number")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final apiService = ref.read(apiServiceProvider);
+    
+    // Request OTP
+    final success = await apiService.requestOtp(phone);
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (success) {
+        setState(() => _isOtpSent = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("OTP sent successfully")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Failed to send OTP. Please try again.")),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleOtpSubmit() async {
+    final otp = _otpController.text.trim();
+    if (otp.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter valid 6-digit OTP")),
       );
       return;
     }
@@ -38,35 +79,94 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
     final apiService = ref.read(apiServiceProvider);
     
     try {
-      final response = await apiService.login(_emailController.text, _passwordController.text);
-      if (response != null && response['user'] != null) {
-        final userData = User.fromJson(response['user']);
-        ref.read(userProvider.notifier).state = userData;
+      final response = await apiService.verifyOtp(_phoneController.text.trim(), otp);
+      
+      if (response != null) {
+        if (response['access_token'] != null && response['action'] != 'REGISTER') {
+           await _finalizeLogin(response);
+        } else if (response['action'] == 'SELECT_ROLE') {
+           // For Customer App, we should automatically pick 'CUSTOMER' role if available
+           // or show error if not.
+           final List roles = response['roles'] ?? [];
+           final hasCustomerRole = roles.any((r) => r['role'] == 'CUSTOMER');
+           
+           if (hasCustomerRole) {
+             // Select Customer Role
+             final customerRole = roles.firstWhere((r) => r['role'] == 'CUSTOMER');
+             final shopId = customerRole['shop_id'] ?? ""; // Usually null for generic customer
+             final userId = response['user']['id'];
+             
+             final tokenResp = await apiService.selectRole(userId, "CUSTOMER", shopId);
+             if (tokenResp != null) {
+               await _finalizeLogin(tokenResp);
+             } else {
+               _showError("Failed to select role");
+             }
+           } else {
+             _showError("This number is not registered as a customer.");
+           }
+        } else if (response['action'] == 'REGISTER') {
+           print("DEBUG: Auto-registering new user...");
+           
+           final registerData = {
+             'name': _nameController.text.trim(),
+             'role': 'CUSTOMER',
+             'email': null,
+             'agreedToPrivacy': true,
+             'agreedToTerms': true,
+             'legalConsentName': _nameController.text.trim(),
+             'legalConsentPlace': 'App Login',
+             'legalConsentTimestamp': DateTime.now().toIso8601String(),
+           };
 
-        if (mounted) {
-          if (userData.role == AppRole.customer) {
-            context.go('/customer');
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("This app is for customers only. Please use the Barber App.")),
-            );
-          }
+           final regResponse = await apiService.registerUser(response['access_token'], registerData);
+           
+           if (regResponse != null) {
+              print("DEBUG: Registration successful");
+              final newUser = User.fromJson(regResponse['user']);
+              final effectiveUser = newUser.copyWith(token: regResponse['access_token']);
+              
+              await ref.read(userProvider.notifier).setUser(effectiveUser);
+              
+              if (mounted) {
+                // Determine shop ID (if any) to open specific shop page, else go home
+                // For now, simple registration goes to home
+                context.go('/customer');
+              }
+           } else {
+             _showError("Registration failed. Please try again.");
+           }
         }
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Invalid email or password")),
-          );
-        }
+        _showError("Invalid OTP");
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Login error: $e")),
-        );
-      }
+      _showError("Login error: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+  
+  Future<void> _finalizeLogin(Map<String, dynamic> response) async {
+    if (response['user'] != null) {
+        var userData = User.fromJson(response['user']);
+        
+        // Attach token if available
+        if (response['access_token'] != null) {
+            userData = userData.copyWith(token: response['access_token']);
+        }
+
+        await ref.read(userProvider.notifier).setUser(userData);
+
+        if (mounted) {
+          context.go('/customer');
+        }
+    }
+  }
+
+  void _showError(String msg) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
@@ -74,6 +174,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
   Widget build(BuildContext context) {
     isDark = ref.watch(themeProvider);
     return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBGStart : AppTheme.lightBGStart,
       extendBody: true,
       body: GradientBackground(
         isDark: isDark,
@@ -104,7 +205,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
                 ),
               ),
             ),
-            Center(
+            Align(
+              alignment: Alignment.center,
               child: SingleChildScrollView(
                 physics: const ClampingScrollPhysics(),
                 child: AnimatedSwitcher(
@@ -126,7 +228,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const SizedBox(height: 140), // Increased to shift downward
+          const SizedBox(height: 140),
           _buildLogo(),
           const SizedBox(height: 60),
             _buildRoleButton(
@@ -149,7 +251,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: AppTheme.darkButton,
-            borderRadius: BorderRadius.circular(24), // Match React rounded-3xl
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
                 color: Colors.red.withOpacity(0.2),
@@ -225,37 +327,62 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          // Back button removed as there is only one role in this app
           const SizedBox(height: 32),
           Text(
-            isLogin ? "Welcome Back" : "Join BarberSync",
+            _isOtpSent ? "Verify OTP" : "Welcome",
             style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900),
           ),
-          Text(
-            selectedRole == "CUSTOMER" ? "Customer Account" : "Barber & Shop Management",
-            style: TextStyle(color: (isDark ? Colors.white : Colors.black).withOpacity(0.6)),
+          SizedBox(
+            height: 44, // Fixed height to prevent subtitle wrapping from jumping the layout
+            child: Text(
+              _isOtpSent 
+                ? "Enter the code sent to ${_phoneController.text}" 
+                : "Enter your phone number to continue",
+              style: TextStyle(
+                color: (isDark ? Colors.white : Colors.black).withOpacity(0.6),
+                height: 1.5,
+              ),
+            ),
           ),
-          const SizedBox(height: 40),
-          _buildInput(LucideIcons.mail, "Email Address", _emailController),
-          const SizedBox(height: 16),
-          _buildInput(LucideIcons.lock, "Password", _passwordController, isPassword: true),
+          const SizedBox(height: 32),
+          
+          if (!_isOtpSent) ...[
+            _buildInput(LucideIcons.user, "Full Name", _nameController),
+            const SizedBox(height: 16),
+            _buildInput(LucideIcons.phone, "Phone Number", _phoneController),
+          ],
+
+          if (_isOtpSent)
+             _buildInput(LucideIcons.key, "6-Digit OTP", _otpController),
+
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _isLoading ? null : _handleLogin,
+              onPressed: _isLoading 
+                  ? null 
+                  : (_isOtpSent ? _handleOtpSubmit : _handlePhoneSubmit),
               child: _isLoading 
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text(isLogin ? "Login" : "Create Account"),
+                : Text(_isOtpSent ? "Login / Sign Up" : "Get OTP"),
             ),
           ),
-          const SizedBox(height: 24),
-          Center(
-            child: TextButton(
-              onPressed: () => context.push('/register'),
-              child: Text(
-                isLogin ? "Don't have an account? Sign Up" : "Already have an account? Log In",
-                style: const TextStyle(color: AppTheme.darkAccent, fontWeight: FontWeight.bold),
+          
+          Visibility(
+            visible: _isOtpSent,
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            child: Center(
+              child: TextButton(
+                onPressed: () => setState(() {
+                  _isOtpSent = false;
+                  _otpController.clear();
+                }),
+                child: Text(
+                  "Change Phone Number",
+                  style: TextStyle(color: isDark ? AppTheme.darkAccent : Colors.black, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ),
@@ -275,6 +402,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
       child: TextField(
         controller: controller,
         obscureText: isPassword,
+        keyboardType: hint.contains("Phone") || hint.contains("OTP") 
+            ? TextInputType.number 
+            : TextInputType.text,
         decoration: InputDecoration(
           icon: Icon(icon, color: (isDark ? Colors.white : Colors.black).withOpacity(0.4)),
           hintText: hint,
